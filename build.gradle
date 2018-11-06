@@ -1,0 +1,27 @@
+plugins {
+    id 'java-library'
+    id 'edu.wpi.first.GradleRIO' version '2019.0.0-alpha-3'
+}
+
+version =  '0.0.1'
+
+repositories {
+    mavenCentral()
+}
+
+jar {
+    manifest {
+        attributes('Implementation-Title': project.name,
+                   'Implementation-Version': project.version)
+    }
+}
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+dependencies {
+    compile wpilib()
+    testCompile 'junit:junit:4.12'
+    testCompile 'org.mockito:mockito-core:2.7.22'
+    testCompile 'com.google.truth:truth:0.42'
+}
