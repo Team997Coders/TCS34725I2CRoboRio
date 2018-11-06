@@ -24,4 +24,13 @@ dependencies {
     testCompile 'junit:junit:4.12'
     testCompile 'org.mockito:mockito-core:2.7.22'
     testCompile 'com.google.truth:truth:0.42'
+    testCompile 'com.neuronrobotics:nrjavaserial:3.14.0'
+}
+
+configurations {
+    nativeDesktopLib
+}
+
+dependencies {
+    nativeDesktopLib 'com.neuronrobotics:nrjavaserial:3.14.0'
 }

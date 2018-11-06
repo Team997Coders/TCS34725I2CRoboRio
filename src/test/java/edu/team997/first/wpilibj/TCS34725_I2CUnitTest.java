@@ -2,20 +2,20 @@ package edu.team997.first.wpilibj;
 
 import static com.google.common.truth.Truth.*;
 import edu.wpi.first.wpilibj.*;
-import java.nio.ByteBuffer;
 import org.junit.Test;
 import static org.junit.Assert.*;
-import org.mockito.invocation.*;
-import org.mockito.stubbing.*;
 import static org.mockito.Mockito.*;
 
-public class TCS34725_I2CTest {
+public class TCS34725_I2CUnitTest {
     @Test 
-    public void itShouldNotIdentifyAsATCS34725() {
+    public void itShouldNotInitializeIfNotATCS34725() {
         Throwable e = null;
 
         // Assemble
         I2C i2cMock = mock(I2C.class);
+        when(UnitTestMock.READ_TCS34725_ID(i2cMock))
+        .thenAnswer(UnitTestMock.WITH_INVALID_TCS34725_ID())
+        .thenReturn(false);
 
         // Act
         try {
@@ -30,20 +30,14 @@ public class TCS34725_I2CTest {
     }
 
     @Test 
-    public void itShouldIdentifyAsATCS34725AndInit() {
+    public void itShouldInitializeIfATCS34725() {
         Throwable e = null;
 
         // Assemble
         I2C i2cMock = mock(I2C.class);
-        doAnswer(new Answer<Void>() {
-            @Override
-            public Void answer(InvocationOnMock invocation) {
-                ByteBuffer rawByte = (ByteBuffer) invocation.getArguments()[2];
-                rawByte.put((byte)0x44);
-                rawByte.rewind();
-                return null;
-            }
-        }).when(i2cMock).read(eq(TCS34725_I2C.TCS34725_COMMAND_BIT | TCS34725_I2C.TCS34725_ID), eq(1), any(ByteBuffer.class));
+        when(UnitTestMock.READ_TCS34725_ID(i2cMock))
+        .thenAnswer(UnitTestMock.WITH_VALID_TCS34725_ID())
+        .thenReturn(false);
 
         // Act
         try {
