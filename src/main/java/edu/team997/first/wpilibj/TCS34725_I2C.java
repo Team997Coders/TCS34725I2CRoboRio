@@ -211,10 +211,19 @@ public class TCS34725_I2C extends SendableBase {
      * @throws TransferAbortedException
      */
 	public void enable() throws TransferAbortedException, InterruptedException {
-		this.write8(TCS34725_ENABLE, (byte) TCS34725_ENABLE_PON);
+		this.write8(TCS34725_ENABLE, TCS34725_ENABLE_PON);
 		Thread.sleep(10L);
-		this.write8(TCS34725_ENABLE, (byte) (TCS34725_ENABLE_PON | TCS34725_ENABLE_AEN));
+		this.write8(TCS34725_ENABLE, (TCS34725_ENABLE_PON | TCS34725_ENABLE_AEN));
+        if (verbose) {
+            System.out.println("TCS34725 enabled");
+        }
     }
+
+	public boolean isEnabled() throws TransferAbortedException {
+		int reg = 0;
+		reg = this.readU8(TCS34725_ENABLE);
+		return ((reg & TCS34725_ENABLE_PON) != 0 && (reg & TCS34725_ENABLE_AEN) != 0);
+	}
 
 	public void disable() throws TransferAbortedException {
 		int reg = 0;
