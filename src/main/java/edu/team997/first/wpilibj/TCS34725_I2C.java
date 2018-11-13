@@ -179,6 +179,12 @@ public class TCS34725_I2C extends SendableBase {
         }    
     }
 
+	@Override
+	public void free() {
+		super.free();
+		i2c.free();
+	}
+
 	/**
 	 * Verbosity will write trace information to the console.
 	 * 
