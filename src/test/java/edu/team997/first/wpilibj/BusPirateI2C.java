@@ -1,219 +1,130 @@
 package edu.team997.first.wpilibj;
 
+import java.io.*;
+
+import purejavacomm.UnsupportedCommOperationException;
+
 public class BusPirateI2C extends BusPirate {
-    public final static byte I2C_BITBANG = 0b00000000;
     public final static byte I2C_MODE = 0b00000010;
-    public final static byte I2C_MODE_VERSION = 0b000000001;
-	public final static byte I2C_START_BIT = 0b00000010;
-	public final static byte I2C_STOP_BIT = 0b00000011;
-	public final static byte I2C_READ_BYTE = 0b00000100;
-	public final static byte I2C_ACK_BIT = 0b00000110;
-    public final static byte I2C_NACK_BIT = 0b00000111;
-    public final static byte I2C_BULK_I2C_WRITE_XXXX = 0b00010000;
-    public final static byte I2C_CONFIGURE_PERIPHERALS = 0b01000000;
-    public final static byte I2C_POWER_BIT = 0b00001000;
-    public final static byte I2C_PULLUP_BIT = 0b00000100;
-    public final static byte I2C_AUX_BIT = 0b00000010;
-    public final static byte I2C_CS_BIT = 0b00000001;
-    public final static byte I2C_WRITE_THEN_READ = 0b00001000;
+	public final static byte I2C_START_BIT_CMD = 0b00000010;
+	public final static byte I2C_STOP_BIT_CMD = 0b00000011;
+	public final static byte I2C_READ_BYTE_CMD = 0b00000100;
+	public final static byte I2C_ACK_BIT_CMD = 0b00000110;
+    public final static byte I2C_NACK_BIT_CMD = 0b00000111;
+    public final static byte I2C_BULK_I2C_WRITE_CMD = 0b00010000;
+    public final static byte I2C_CONFIGURE_PERIPHERALS_CMD = 0b01000000;
+    public final static int I2C_POWER_BIT = 3;
+    public final static int I2C_PULLUP_BIT = 2;
+    public final static int I2C_AUX_BIT = 1;
+    public final static int I2C_CS_BIT = 0;
+    public final static byte I2C_WRITE_THEN_READ_CMD = 0b00001000;
+
+    private byte peripheralRegisterBuffer = 0x00;
 
     public BusPirateI2C() throws NoBusPirateFoundException, I2CModeNotSupported {
         super();
-        if (setI2CMode() == false) {
+        if (!setMode(I2C_MODE, "I2C1")) {
             throw new I2CModeNotSupported();
         }
     }
 
-    private boolean setI2CMode() {
-        byte[] sent = new byte[100];
-
-        try {
-            if (port == null) {
-                return false;
-            } else {
-                port.enableReceiveTimeout(1000);
-                sent[0] = I2C_MODE;
-                out.write(sent, 0, 1);
-                Thread.sleep(10);
-                return confirmI2CMode();
-            }
-        } catch (Exception e) {
-            System.err.println(e);
-            return false;
-        }
-    }
-
-    private boolean confirmI2CMode() {
-        byte[] sent = new byte[100];
-        byte[] rcvd = new byte[100];
-
-        try {
-            if (port == null) {
-                return false;
-            } else {
-                port.enableReceiveTimeout(1000);
-                sent[0] = I2C_MODE_VERSION;
-                out.write(sent, 0, 1);
-                Thread.sleep(10);
-                int count = in.read(rcvd, 0, 4);
-                if (count == 4) {
-                    if ((new String(rcvd, 0, 4, "US-ASCII")).contains("I2C1")) {
-                        return true;
-                    } else {
-                        return false;
-                    }
-                } else {
-                    return false;
-                }
-            }
-        } catch (Exception e) {
-            System.err.println(e);
-            return false;
-        }
-    }
-
-    /**
-     * Set the power state to the peripheral
-     * 
-     * @param powerOn   Set true to power on the device
-     * @return          True if successful; false otherwise
-     */
-    protected boolean setPower(boolean powerOn) {
+    private void commonCommand(byte command) throws BusPirateCommPortClosedException, I2CModeProtocolException {
         // Send the message to the device and wait synchrounsly for the response
         try {
             if (port == null) {                                             // Port must be open
-                return false;
+                throw new BusPirateCommPortClosedException();
             } else {
-                // TODO: This should read peripherial bits and not trounce or perhaps be changed to set these bits simultaneously
-                byte[] sendBuffer = {powerOn ? (byte)(I2C_CONFIGURE_PERIPHERALS | I2C_POWER_BIT) : I2C_CONFIGURE_PERIPHERALS};
+                byte[] sendBuffer = {command};
                 byte[] rcvdBuffer = new byte[100];
                 port.enableReceiveTimeout(1000);
                 out.write(sendBuffer, 0, sendBuffer.length);
                 int count = in.read(rcvdBuffer);
                 if (count == 1) {
-                    if (rcvdBuffer[0] == 0x01) {
-                        return true;
-                    } else {
-                        return false;
+                    if (rcvdBuffer[0] != 0x01) {
+                        throw new I2CModeProtocolException("Unexpected response from command " + String.format("0x%02X ", command));
                     }
                 } else {
-                    return false;
+                    throw new I2CModeProtocolException("Length of response was unexpected.");
                 }
             }
-        } catch (Exception e) {
+        } catch (IOException | UnsupportedCommOperationException e) {
             System.err.println(e);
-            return false;
+            throw new I2CModeProtocolException("An exception occurred communicating with bus pirate.");
         }
     }
 
     /**
-     * Sends start bit to the device
+     * Sets the peripheral bit.  Attempts to preserve any existing bits set by buffering register value.
+     * Note that the bus pirate protocol does not provide the current state of this register.
      * 
-     * @return          True if successful; false otherwise
+     * @param state                                Set to true to turn on peripheral
+     * @param peripheralBit                        The peripheral bit to set
+     * @throws BusPirateCommPortClosedException    Thrown if the communication port is closed
+     * @throws I2CModeProtocolException            Thrown if an unexpected condition is detected communicating with the bus pirate
      */
-    protected boolean sendStartBit() {
+    protected void setPeripheral(boolean state, int peripheralBit) throws BusPirateCommPortClosedException, I2CModeProtocolException {
         // Send the message to the device and wait synchrounsly for the response
-        try {
-            if (port == null) {                                             // Port must be open
-                return false;
-            } else {
-                byte[] sendBuffer = {I2C_START_BIT};
-                byte[] rcvdBuffer = new byte[100];
-                port.enableReceiveTimeout(1000);
-                out.write(sendBuffer, 0, sendBuffer.length);
-                int count = in.read(rcvdBuffer);
-                if (count == 1) {
-                    if (rcvdBuffer[0] == 0x01) {
-                        return true;
-                    } else {
-                        return false;
-                    }
-                } else {
-                    return false;
-                }
-            }
-        } catch (Exception e) {
-            System.err.println(e);
-            return false;
+        if (state) {
+            peripheralRegisterBuffer |= (1 << peripheralBit);     // Twiddle bit on
+        } else {
+            peripheralRegisterBuffer &= ~(1 << peripheralBit);    // Twiddle bit off while preserving state of other bits
         }
+        commonCommand((byte)(I2C_CONFIGURE_PERIPHERALS_CMD | peripheralRegisterBuffer));
     }
 
     /**
-     * Sends stop bit to the device
+     * Sends start bit to the device.
      * 
-     * @return          True if successful; false otherwise
+     * @throws BusPirateCommPortClosedException    Thrown if the communication port is closed
+     * @throws I2CModeProtocolException            Thrown if an unexpected condition is detected communicating with the bus pirate
      */
-    protected boolean sendStopBit() {
-        // Send the message to the device and wait synchrounsly for the response
-        try {
-            if (port == null) {                                             // Port must be open
-                return false;
-            } else {
-                byte[] sendBuffer = {I2C_STOP_BIT};
-                byte[] rcvdBuffer = new byte[100];
-                port.enableReceiveTimeout(1000);
-                out.write(sendBuffer, 0, sendBuffer.length);
-                int count = in.read(rcvdBuffer);
-                if (count == 1) {
-                    if (rcvdBuffer[0] == 0x01) {
-                        return true;
-                    } else {
-                        return false;
-                    }
-                } else {
-                    return false;
-                }
-            }
-        } catch (Exception e) {
-            System.err.println(e);
-            return false;
-        }
+    protected void sendStartBit() throws BusPirateCommPortClosedException, I2CModeProtocolException {
+        commonCommand(I2C_START_BIT_CMD);
     }
 
     /**
-     * Sends ACK bit to the device
+     * Sends stop bit to the device.
      * 
-     * @return          True if successful; false otherwise
+     * @throws BusPirateCommPortClosedException    Thrown if the communication port is closed
+     * @throws I2CModeProtocolException            Thrown if an unexpected condition is detected communicating with the bus pirate
      */
-    protected boolean sendACK() {
-        // Send the message to the device and wait synchrounsly for the response
-        try {
-            if (port == null) {                                             // Port must be open
-                return false;
-            } else {
-                byte[] sendBuffer = {I2C_ACK_BIT};
-                byte[] rcvdBuffer = new byte[100];
-                port.enableReceiveTimeout(1000);
-                out.write(sendBuffer, 0, sendBuffer.length);
-                int count = in.read(rcvdBuffer);
-                if (count == 1) {
-                    if (rcvdBuffer[0] == 0x01) {
-                        return true;
-                    } else {
-                        return false;
-                    }
-                } else {
-                    return false;
-                }
-            }
-        } catch (Exception e) {
-            System.err.println(e);
-            return false;
-        }
+    protected void sendStopBit() throws BusPirateCommPortClosedException, I2CModeProtocolException {
+        commonCommand(I2C_STOP_BIT_CMD);
     }
 
     /**
-     * Read byte from the device
+     * Sends ACK bit to the device.
      * 
-     * @return          The byte read
+     * @throws BusPirateCommPortClosedException    Thrown if the communication port is closed
+     * @throws I2CModeProtocolException            Thrown if an unexpected condition is detected communicating with the bus pirate
      */
-    protected byte readByte() {
-        // Send the message to the device and wait synchrounsly for the response
+    protected void sendACK() throws BusPirateCommPortClosedException, I2CModeProtocolException {
+        commonCommand(I2C_ACK_BIT_CMD);
+    }
+    
+    /**
+     * Sends NACK bit to the device.
+     * 
+     * @throws BusPirateCommPortClosedException    Thrown if the communication port is closed
+     * @throws I2CModeProtocolException            Thrown if an unexpected condition is detected communicating with the bus pirate
+     */
+    protected void sendNACK() throws BusPirateCommPortClosedException, I2CModeProtocolException {
+        commonCommand(I2C_NACK_BIT_CMD);
+    }
+
+    /**
+     * Read byte from the device.
+     * 
+     * @return                                     The byte read
+     * @throws BusPirateCommPortClosedException    Thrown if the communication port is closed
+     * @throws I2CModeProtocolException            Thrown if an unexpected condition is detected communicating with the bus pirate
+     */
+    protected byte readByte() throws BusPirateCommPortClosedException, I2CModeProtocolException {
         try {
             if (port == null) {                                             // Port must be open
-                return 0x00;
+                throw new BusPirateCommPortClosedException();
             } else {
-                byte[] sendBuffer = {I2C_READ_BYTE};
+                byte[] sendBuffer = {I2C_READ_BYTE_CMD};
                 byte[] rcvdBuffer = new byte[100];
                 port.enableReceiveTimeout(1000);
                 out.write(sendBuffer, 0, sendBuffer.length);
@@ -221,52 +132,28 @@ public class BusPirateI2C extends BusPirate {
                 if (count == 1) {
                     return rcvdBuffer[0];
                 } else {
-                    return 0x00;
+                    throw new I2CModeProtocolException("Unexpected number of bytes received.");
                 }
             }
-        } catch (Exception e) {
+        } catch (IOException | UnsupportedCommOperationException e) {
             System.err.println(e);
-            return 0x00;
+            throw new I2CModeProtocolException("An exception occurred communicating with bus pirate.");
         }
     }
 
     /**
-     * Sends NACK bit to the device
+     * Write up to 16 bytes at once to the device.
      * 
-     * @return          True if successful; false otherwise
+     * @param bytesToWrite                          Bytes to write
+     * @throws BusPirateCommPortClosedException     Thrown if the communication port is closed
+     * @throws I2CModeProtocolException             Thrown if an unexpected condition is detected communicating with the bus pirate
+     * @throws IllegalArgumentException             Thrown if number of bytes exceeded
      */
-    protected boolean sendNACK() {
+    protected void writeBulk(byte[] bytesToWrite) throws BusPirateCommPortClosedException, I2CModeProtocolException, IllegalArgumentException {
         // Send the message to the device and wait synchrounsly for the response
         try {
             if (port == null) {                                             // Port must be open
-                return false;
-            } else {
-                byte[] sendBuffer = {I2C_NACK_BIT};
-                byte[] rcvdBuffer = new byte[100];
-                port.enableReceiveTimeout(1000);
-                out.write(sendBuffer, 0, sendBuffer.length);
-                int count = in.read(rcvdBuffer);
-                if (count == 1) {
-                    if (rcvdBuffer[0] == 0x01) {
-                        return true;
-                    } else {
-                        return false;
-                    }
-                } else {
-                    return false;
-                }
-            }
-        } catch (Exception e) {
-            System.err.println(e);
-            return false;
-        }
-    }
-
-    protected boolean writeBulk(byte[] bytesToWrite) {
-        // Send the message to the device and wait synchrounsly for the response
-        try {
-            if (port == null) {                                             // Port must be open
-                return false;
+                throw new BusPirateCommPortClosedException();
             } else {
                 byte[] sendBuffer = {getBulkI2CWriteCommand(bytesToWrite.length)};  // Send the bulk write command to BP
                 byte[] rcvdBuffer = new byte[100];
@@ -278,41 +165,58 @@ public class BusPirateI2C extends BusPirate {
                         // BP bulk write command succedded...proceed with writing data
                         out.write(bytesToWrite, 0, bytesToWrite.length);
                         count = in.read(rcvdBuffer);
-                        if (count == bytesToWrite.length) {
-                            return true;
-                        } else {
-                            return false;
+                        if (count != bytesToWrite.length) {
+                            throw new I2CModeProtocolException("Length of response writing bytes was unexpected.");
                         }
                     } else {
-                        return false;
+                        throw new I2CModeProtocolException("Unexpected response writing bytes.");
                     }
                 } else {
-                    return false;
+                    throw new I2CModeProtocolException("Length of response from command was unexpected.");
                 }
             }
-        } catch (IllegalArgumentException e) {
-            throw e;
-        } catch (Exception e) {
+        } catch (IOException | UnsupportedCommOperationException e) {
             System.err.println(e);
-            return false;
+            throw new I2CModeProtocolException("An exception occurred communicating with bus pirate.");
         }
     }
 
+    /**
+     * Get the I2C slave address to put on the wire with the read bit set.
+     * 
+     * @param slaveAddress  The slave address of the device
+     * @return              Returned address ready for the wire
+     */
     protected static byte getSlaveAddressRead(byte slaveAddress) {
         return (byte)((slaveAddress << 1) + 1);
     }
 
+    /**
+     * Get the I2C slave address to put on the wire with the write bit set.
+     * 
+     * @param slaveAddress  The slave address of the device
+     * @return              Returned address ready for the wire
+     */
     protected static byte getSlaveAddressWrite(byte slaveAddress) {
         return (byte)((slaveAddress << 1));
     }
 
+    /**
+     * Get the I2C bulk write command to put on the wire with number of bytes to write.
+     * 
+     * @param count         Count of number of bytes to write
+     * @return              Returned command ready for the wire
+     */
     protected static byte getBulkI2CWriteCommand(int count) {
         if (count > 16) {
             throw new IllegalArgumentException("Bulk write count cannot exceed 16 bytes.");
         }
+        if (count < 1) {
+            throw new IllegalArgumentException("Bulk write count must write at least one byte.");
+        }
         // The count appended to low nibble of the bulk write command is zero based
         byte countNibble = (byte)(count - 1);
-        return (byte)(I2C_BULK_I2C_WRITE_XXXX | countNibble);
+        return (byte)(I2C_BULK_I2C_WRITE_CMD | countNibble);
     }
 
     public static class I2CModeNotSupported extends Exception {
@@ -320,6 +224,15 @@ public class BusPirateI2C extends BusPirate {
 			super(message);
 		}
 		public I2CModeNotSupported() {
+			super();
+		}
+	}
+
+    public static class I2CModeProtocolException extends Exception {
+		public I2CModeProtocolException(String message) {
+			super(message);
+		}
+		public I2CModeProtocolException() {
 			super();
 		}
 	}

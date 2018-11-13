@@ -9,6 +9,10 @@ public class BusPirate {
     protected InputStream in = null;
     protected OutputStream out = null;
     private static CommPortIdentifier busPiratePortIdentifier = null;
+    public final static byte BP_BITBANG = 0b00000000;
+    public final static byte BP_SET_MODE = 0b00000010;
+    public final static byte BP_GET_MODE = 0b000000001;
+    public final static byte BP_RESET = 0b00001111;
 
     public BusPirate() throws NoBusPirateFoundException {
         // Find a bus pirate plugged into a comm port
@@ -101,6 +105,12 @@ public class BusPirate {
 		}
     }
     
+    /**
+     * Drains any cruft sitting in the bus pirate serial port receive buffer.
+     * 
+     * @throws InterruptedException
+     * @throws IOException
+     */
     protected void drain() throws InterruptedException, IOException {
 		Thread.sleep(10);
 		int n;
@@ -111,8 +121,12 @@ public class BusPirate {
 		}
     }
 
-    protected Boolean bitBangMode() {
-        Boolean done = false;
+    /**
+     * Set the bus pirate into raw bitbang mode.
+     * 
+     * @return  True if bus pirate confirms bitbang mode; false otherwise
+     */
+    protected boolean bitBangMode() {
         int tries = 0;
         byte[] sent = new byte[100];
         byte[] rcvd = new byte[100];
@@ -122,8 +136,8 @@ public class BusPirate {
                 return false;
             } else {
                 port.enableReceiveTimeout(100);
-                while(!done) {
-                    sent[0] = 0x00;
+                while(true) {
+                    sent[0] = BP_BITBANG;
                     out.write(sent, 0, 1);
                     tries++;
                     Thread.sleep(10);
@@ -131,7 +145,7 @@ public class BusPirate {
                     if (count != 5 && tries > 20) {
                         return false;
                     } else if ((new String(rcvd, 0, 5, "US-ASCII")).contains("BBIO1")) {
-                        done = true;
+                        return true;
                     }
 
                     if (tries > 25) {
@@ -143,7 +157,118 @@ public class BusPirate {
             System.err.println(e);
             return false;
         }
-        return true;
+    }
+
+    /**
+     * Performs a complete hardware reset of the bus pirate and returns the 
+     * device to the user terminal interface.  Serial port may have version
+     * string and garbage after reset.  Drain port before re-entering bitbang
+     * mode.
+     * 
+     * @return  True if bus pirate reports reset confirmation; false otherwise
+     */
+    protected boolean reset() {
+        byte[] sent = new byte[100];
+        byte[] rcvd = new byte[100];
+
+        try {
+            if (port == null) {
+                return false;
+            } else {
+                setMode(BP_BITBANG, "BBIO1");           // Must be in raw bitbang mode to send reset command
+                port.enableReceiveTimeout(1000);
+                sent[0] = BP_RESET;
+                out.write(sent, 0, 1);
+                int count = in.read(rcvd, 0, 1);
+                if (count > 0) {                        // Responds with at least one byte with a one in it...may have other jibberish if it resets too quickly
+                    if (rcvd[0] == 0x01) {
+                        return true;
+                    } else {
+                        return false;
+                    }
+                } else {
+                    return false;
+                }
+            }
+        } catch (Exception e) {
+            System.err.println(e);
+            return false;
+        }
+    }
+
+    /**
+     * Sets the binary bitbang protocol mode that the bus pirate should switch into
+     * 
+     * @param mode              The mode as documented <a href="http://dangerousprototypes.com/docs/Bitbang">here</a>
+     * @param expectedReply     The string that should be returned from the bus pirate to confirm mode switch
+     * @return                  True if the bus pirate mode was set successfully; false otherwise
+     */
+    protected boolean setMode(byte mode, String expectedReply) {
+        byte[] sent = new byte[100];
+        byte[] rcvd = new byte[100];
+
+        try {
+            if (port == null) {
+                return false;
+            } else {
+                port.enableReceiveTimeout(1000);
+                sent[0] = mode;
+                out.write(sent, 0, 1);
+                Thread.sleep(10);
+                int count = in.read(rcvd, 0, expectedReply.length());
+                if (count == expectedReply.length()) {
+                    return isModeString(rcvd, expectedReply);
+                } else {
+                    return false;
+                }
+            }
+        } catch (Exception e) {
+            System.err.println(e);
+            return false;
+        }
+    }
+
+    /**
+     * Gets the binary bitbang protocol mode that the bus pirate is responding to
+     * 
+     * @param expectedReply     The expected mode string reply as documented <a href="http://dangerousprototypes.com/docs/Bitbang">here</a>
+     * @return                  True is the mode matches the sent string
+     */
+    protected boolean confirmMode(String expectedReply) {
+        byte[] sent = new byte[100];
+        byte[] rcvd = new byte[100];
+
+        try {
+            if (port == null) {
+                return false;
+            } else {
+                port.enableReceiveTimeout(1000);
+                sent[0] = BP_GET_MODE;
+                out.write(sent, 0, 1);
+                Thread.sleep(10);
+                int count = in.read(rcvd, 0, expectedReply.length());
+                if (count == expectedReply.length()) {
+                    return isModeString(rcvd, expectedReply);
+                } else {
+                    return false;
+                }
+            }
+        } catch (Exception e) {
+            System.err.println(e);
+            return false;
+        }
+    }
+
+    private boolean isModeString(byte[] bufferToTest, String expectedReply) throws UnsupportedEncodingException {
+        if (bufferToTest.length < expectedReply.length()) {
+            return false;
+        } else {
+            if ((new String(bufferToTest, 0, expectedReply.length(), "US-ASCII")).contains(expectedReply)) {
+                return true;
+            } else {
+                return false;
+            }
+        }
     }
 
     public static class NoBusPirateFoundException extends Exception {
@@ -151,6 +276,15 @@ public class BusPirate {
 			super(message);
 		}
 		public NoBusPirateFoundException() {
+			super();
+		}
+	}
+
+    public static class BusPirateCommPortClosedException extends Exception {
+		public BusPirateCommPortClosedException(String message) {
+			super(message);
+		}
+		public BusPirateCommPortClosedException() {
 			super();
 		}
 	}

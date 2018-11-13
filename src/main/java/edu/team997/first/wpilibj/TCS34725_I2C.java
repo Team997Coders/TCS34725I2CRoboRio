@@ -4,9 +4,9 @@ import edu.wpi.first.networktables.NetworkTableEntry;
 import edu.wpi.first.wpilibj.*;
 import edu.wpi.first.wpilibj.smartdashboard.SendableBuilder;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.*;
 
 /**
  * Driver for the TCS34725 RGB color sensor. Adapted for roboRio/WPILib
@@ -17,8 +17,8 @@ import java.util.Map;
 public class TCS34725_I2C extends SendableBase {
 	protected I2C i2c;
 
-	private final static ByteOrder TCS34725_ENDIANNESS = ByteOrder.BIG_ENDIAN;
     public final static int TCS34725_COMMAND_BIT = 0x80;
+    public final static int TCS34725_COMMAND_AUTO_INCREMENT = 0x20;
     public final static int TCS34725_ADDRESS = 0x29;
 	public final static int TCS34725_ENABLE = 0x00;
 	public final static int TCS34725_ENABLE_AIEN = 0x10; // RGBC Interrupt Enable
@@ -75,7 +75,7 @@ public class TCS34725_I2C extends SendableBase {
 	public final static int TCS34725_INTEGRATIONTIME_154MS = 0xC0;   //  154ms - 64 cycles  - Max Count: 65535
 	public final static int TCS34725_INTEGRATIONTIME_700MS = 0x00;   //  700ms - 256 cycles - Max Count: 65535
 
-	public final static int TCS34725_GAIN_1X = 0x00;   //  No gain
+	public final static int TCS34725_GAIN_1X = 0x00;   //  1x gain
 	public final static int TCS34725_GAIN_4X = 0x01;   //  4x gain
 	public final static int TCS34725_GAIN_16X = 0x02;   //  16x gain
 	public final static int TCS34725_GAIN_60X = 0x03;   //  60x gain
@@ -91,9 +91,11 @@ public class TCS34725_I2C extends SendableBase {
 		INTEGRATION_TIME_DELAY.put(TCS34725_INTEGRATIONTIME_700MS, 700_000L);   // 700ms - 256 cycles - Max Count: 65535
     }
     
-    private boolean verbose = false;
+	private boolean verbose = false;
+	final ExecutorService executorService = Executors.newFixedThreadPool(1);
+	Future<?> integrationFuture = null;										// This future will ensure that the requisite integration time has elapsed
 
-    public final static int INTEGRATION_TIME_DEFAULT = TCS34725_INTEGRATIONTIME_2_4MS;
+    public final static int INTEGRATION_TIME_DEFAULT = TCS34725_INTEGRATIONTIME_24MS;
     public final static int GAIN_DEFAULT = TCS34725_GAIN_4X;
     private int integrationTime;
     private int gain;
@@ -163,11 +165,9 @@ public class TCS34725_I2C extends SendableBase {
 
     public TCS34725_I2C(I2C i2c, int integrationTime, int gain, boolean... verbose) {
 		this.i2c = i2c;
-        this.integrationTime = integrationTime;
-        this.gain = gain;
         this.verbose = verbose.length > 0 ? verbose[0] : false;
         try {
-            initialize();
+            initialize(integrationTime, gain);
 		} catch (Exception e) {
 			System.err.println(e.getMessage());
 			throw new RuntimeException(e);
@@ -191,17 +191,31 @@ public class TCS34725_I2C extends SendableBase {
      * 
      * @throws Exception
      */
-	private void initialize() throws Exception {
+	private void initialize(int integrationTime, int gain) throws Exception {
 		int result = this.readU8(TCS34725_ID);
 		if (result != 0x44) {
 			throw new Exception("Device is not a TCS34721/TCS34725");
 		}
-        enable();
+		// Set startup integration time and gain
+		setIntegrationTime(integrationTime);
+		setGain(gain);
+		// Power on
+		enable();
         //TODO: How do I get the channel number from a wired up i2c object (which port was used)?  Members are private.
         setName("TCS34725_I2C", 0);
         if (verbose) {
             System.out.println("TCS34725 initialized");
         }
+	}
+
+	private void setIntegrationTimeAwaiter() {
+		integrationFuture = executorService.submit(
+			() -> {
+				try {
+					Thread.sleep((long) (INTEGRATION_TIME_DELAY.get(this.integrationTime) / 1_000L));
+				} catch (Exception e) {}
+			}
+		);
 	}
 
     /**
@@ -212,11 +226,12 @@ public class TCS34725_I2C extends SendableBase {
      */
 	public void enable() throws TransferAbortedException, InterruptedException {
 		this.write8(TCS34725_ENABLE, TCS34725_ENABLE_PON);
-		Thread.sleep(10L);
+		Thread.sleep(10L);																// Per datasheet, at least 2.4ms must elapse before AEN can be asserted 
 		this.write8(TCS34725_ENABLE, (TCS34725_ENABLE_PON | TCS34725_ENABLE_AEN));
+		setIntegrationTimeAwaiter();
         if (verbose) {
             System.out.println("TCS34725 enabled");
-        }
+		}
     }
 
 	public boolean isEnabled() throws TransferAbortedException {
@@ -225,15 +240,19 @@ public class TCS34725_I2C extends SendableBase {
 		return ((reg & TCS34725_ENABLE_PON) != 0 && (reg & TCS34725_ENABLE_AEN) != 0);
 	}
 
-	public void disable() throws TransferAbortedException {
+	public void disable() throws TransferAbortedException, InterruptedException {
+		// Datasheet does not say it explicitly, but you must wait the 2.4ms between
+		// turning off AEN and PON in order to get the device into the sleep state.
 		int reg = 0;
 		reg = this.readU8(TCS34725_ENABLE);
-		this.write8(TCS34725_ENABLE, (byte) (reg & ~(TCS34725_ENABLE_PON | TCS34725_ENABLE_AEN)));
+		this.write8(TCS34725_ENABLE, (reg & ~(TCS34725_ENABLE_AEN)));
+		Thread.sleep(10L);
+		this.write8(TCS34725_ENABLE, (reg & ~(TCS34725_ENABLE_PON | TCS34725_ENABLE_AEN)));
 	}
 
 	public void setIntegrationTime(int integrationTime) throws TransferAbortedException {
 		this.integrationTime = integrationTime;
-		this.write8(TCS34725_ATIME, (byte) integrationTime);
+		this.write8(TCS34725_ATIME, integrationTime);
 	}
 
 	public int getIntegrationTime() throws TransferAbortedException {
@@ -242,19 +261,32 @@ public class TCS34725_I2C extends SendableBase {
 
 	public void setGain(int gain) throws TransferAbortedException {
 		this.gain = gain;
-		this.write8(TCS34725_CONTROL, (byte) gain);
+		this.write8(TCS34725_CONTROL, gain);
 	}
 
 	public int getGain() throws TransferAbortedException {
 		return this.readU8(TCS34725_CONTROL);
 	}
 
-	public TCSColor getRawData() throws InterruptedException, TransferAbortedException {
-		int r = this.readU16(TCS34725_RDATAL);
-		int b = this.readU16(TCS34725_BDATAL);
-		int g = this.readU16(TCS34725_GDATAL);
-		int c = this.readU16(TCS34725_CDATAL);
-		Thread.sleep((long) (INTEGRATION_TIME_DELAY.get(this.integrationTime) / 1_000L));
+	public TCSColor getRawData() throws TransferAbortedException {
+		int r = 0;
+		int b = 0;
+		int g = 0;
+		int c = 0;
+		try {
+			// Wait on the integration time future
+			integrationFuture.get();
+			r = this.readU16(TCS34725_RDATAL);
+			b = this.readU16(TCS34725_BDATAL);
+			g = this.readU16(TCS34725_GDATAL);
+			c = this.readU16(TCS34725_CDATAL);
+		} catch (ExecutionException | InterruptedException e) {
+			System.err.println("Integration time awaiter error: " + e);
+		} finally {
+			// Reset the integration time future so that polling this method causes enough time
+			// to elapse between samples.
+			setIntegrationTimeAwaiter();
+		}
 		return new TCSColor(r, b, g, c);
 	}
 
@@ -265,7 +297,7 @@ public class TCS34725_I2C extends SendableBase {
 		} else {
 			r &= ~TCS34725_ENABLE_AIEN;
 		}
-		this.write8(TCS34725_ENABLE, (byte) r);
+		this.write8(TCS34725_ENABLE, r);
 	}
 
 	/**
@@ -307,11 +339,15 @@ public class TCS34725_I2C extends SendableBase {
 	 * 
 	 * @param register	The register to write to
 	 * @param value		The value to write
-     * @throws InterruptedException
+     * @throws TransferAbortedException
 	 */
 	private void write8(int register, int value) throws TransferAbortedException {
 		if (i2c.write(TCS34725_COMMAND_BIT | register, (byte) (value & 0xff)) == true) {
 			throw new TransferAbortedException("Write aborted");
+		}
+		if (verbose) {
+			//TODO: The address constant referenced below is not necessarily correct...how to get from i2c object?
+			System.out.println("(U8) I2C: Device " + toHex(TCS34725_ADDRESS) + " wrote " + toHex(value) + " to reg " + toHex(~TCS34725_COMMAND_BIT & register));
 		}
 	}
 
@@ -320,12 +356,17 @@ public class TCS34725_I2C extends SendableBase {
 	 * 
 	 * @param register	Register to read from
 	 * @return 			Value read
-	 * @throws Exception
+	 * @throws TransferAbortedException
 	 */
 	private int readU16(int register) throws TransferAbortedException {
-		int lo = this.readU8(register);
-		int hi = this.readU8(register + 1);
-		int result = (TCS34725_ENDIANNESS == ByteOrder.BIG_ENDIAN) ? (hi << 8) + lo : (lo << 8) + hi; // Big Endian
+		ByteBuffer rawByte = ByteBuffer.allocate(2);
+		if (i2c.read(TCS34725_COMMAND_BIT | TCS34725_COMMAND_AUTO_INCREMENT | register, 2, rawByte) == true) {
+				throw new TransferAbortedException("Read aborted");
+		}
+		byte lo = rawByte.get();
+		byte hi = rawByte.get();
+
+		int result = ((hi & 0xFF) << 8) | (lo & 0xFF);
 		if (verbose) {
 			System.out.println("(U16) I2C: Device " + toHex(TCS34725_ADDRESS) + " returned " + toHex(result) + " from reg " + toHex(~TCS34725_COMMAND_BIT & register));
 		}
@@ -337,7 +378,7 @@ public class TCS34725_I2C extends SendableBase {
 	 * 
 	 * @param reg	Register to read from
 	 * @return		Result read
-	 * @throws Exception
+	 * @throws TransferAbortedException
 	 */
 	private int readU8(int reg) throws TransferAbortedException {
 		int result = 0;
@@ -345,7 +386,7 @@ public class TCS34725_I2C extends SendableBase {
 		if (i2c.read(TCS34725_COMMAND_BIT | reg, 1, rawByte) == true) {
 			throw new TransferAbortedException("Read aborted");
 		}
-		result = rawByte.get();
+		result = rawByte.get() & 0xFF;
 		if (verbose) {
 			//TODO: The address constant referenced below is not necessarily correct...how to get from i2c object?
 			System.out.println("(U8) I2C: Device " + toHex(TCS34725_ADDRESS) + " returned " + toHex(result) + " from reg " + toHex(~TCS34725_COMMAND_BIT & reg));

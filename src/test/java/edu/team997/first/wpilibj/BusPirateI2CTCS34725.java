@@ -1,12 +1,10 @@
 package edu.team997.first.wpilibj;
 
-import java.nio.ByteBuffer;
-
 public class BusPirateI2CTCS34725 extends BusPirateI2C {
 
-    public BusPirateI2CTCS34725() throws NoBusPirateFoundException, I2CModeNotSupported {
+    public BusPirateI2CTCS34725() throws NoBusPirateFoundException, I2CModeNotSupported, BusPirateCommPortClosedException, I2CModeProtocolException {
         super();
-        setPower(true);
+        setPeripheral(true, I2C_POWER_BIT);
     }
 
     /**
@@ -29,12 +27,15 @@ public class BusPirateI2CTCS34725 extends BusPirateI2C {
         }
         // Build up the message as per page 12 of the spec
         try {
-            drain();
             sendStartBit();
             writeBulk(new byte[] {getSlaveAddressRead(slaveAddress)});
             for(int i = 0; i < length; i++) {
                 bytesRead[i] = readByte();
-                sendACK();
+                if (i == (length - 1)) {
+                    sendNACK();
+                } else {
+                    sendACK();
+                }
             }
             sendStopBit();
             return true;
@@ -63,11 +64,10 @@ public class BusPirateI2CTCS34725 extends BusPirateI2C {
         }
         // Build up the message as per page 12 of the spec
         try {
-            drain();
             sendStartBit();
             writeBulk(new byte[] {getSlaveAddressWrite(slaveAddress), commandCode});
             for(int i = 0; i < bytesToWrite.length; i++) {
-                writeBulk(new byte[] {bytesToWrite[i]});                                // Bulk BP command could be used, but we'd have to break up buffer in 16 byte chunks
+                writeBulk(new byte[] {bytesToWrite[i]});                                // Bulk BP command could be used, but we'd have to break up buffer in 16 byte chunks...too lazy
             }
             sendStopBit();
             return true;
@@ -99,14 +99,17 @@ public class BusPirateI2CTCS34725 extends BusPirateI2C {
         }
         // Build up the message as per page 12 of the spec
         try {
-            drain();
             sendStartBit();
             writeBulk(new byte[] {getSlaveAddressWrite(slaveAddress), commandCode});    // Assumption is command bit is already set
             sendStartBit();
             writeBulk(new byte[] {getSlaveAddressRead(slaveAddress)});
             for(int i = 0; i < length; i++) {
                 bytesRead[i] = readByte();
-                sendACK();
+                if (i == (length - 1)) {
+                    sendNACK();
+                } else {
+                    sendACK();
+                }
             }
             sendStopBit();
             return true;
