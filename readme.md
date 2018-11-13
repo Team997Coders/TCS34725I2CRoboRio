@@ -9,8 +9,9 @@ The bus pirate is a hardware communication "swiss army knife" that enables you t
 
 To make this work, connect the bus pirate to the TCS34725 like so (a useful cable such as [this](https://www.sparkfun.com/products/9556) would be helpful.):
 
-BP      TCS34725
-MOSI    SDA
-CLK     SCL
-GND     GND
-+3.3V   Vin
+|BP     | TCS34725  |
+| ----- | --------- |
+| MOSI  | SDA       |
+| CLK   | SCL       |
+| GND   | GND       |
+| +3.3V | Vin       |
