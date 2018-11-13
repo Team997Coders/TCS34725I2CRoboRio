@@ -182,6 +182,11 @@ public class TCS34725_I2C extends SendableBase {
 	@Override
 	public void free() {
 		super.free();
+		try {
+			disable();
+		} catch (Exception e) {
+			System.err.println("Could not disable sensor. Error: " + e);
+		}
 		i2c.free();
 	}
 
