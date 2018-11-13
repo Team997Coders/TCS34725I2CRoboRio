@@ -15,3 +15,6 @@ To make this work, connect the bus pirate to the TCS34725 like so (a useful cabl
 | CLK   | SCL       |
 | GND   | GND       |
 | +3.3V | Vin       |
+
+With the bus pirate connected to your workstation (only tested with Windows), run `./gradlew test`. The integration test will enumerate each COM port to find the bus pirate.
+Once found, integration tests will run. Note that there are some tests which require you to point red, blue, and green objects at the sensor to pass.
