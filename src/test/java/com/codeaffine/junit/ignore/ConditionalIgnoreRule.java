@@ -21,6 +21,11 @@ import org.junit.rules.MethodRule;
 import org.junit.runners.model.FrameworkMethod;
 import org.junit.runners.model.Statement;
 
+/**
+ * A class to set up a decorator which can conditionally ignore JUnit tests based
+ * on an arbitrary condition at test runtime.
+ * See https://www.codeaffine.com/2013/11/18/a-junit-rule-to-conditionally-ignore-tests/
+ */
 public class ConditionalIgnoreRule implements MethodRule {
   
   public interface IgnoreCondition {

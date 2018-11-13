@@ -10,7 +10,10 @@ import java.util.concurrent.*;
 
 /**
  * Driver for the TCS34725 RGB color sensor. Adapted for roboRio/WPILib
- * based on code from  <a href="https://github.com/OlivierLD/raspberry-coffee/blob/master/I2C.SPI/src/i2c/sensor/TCS34725.java">raspberry-coffee</a>
+ * based on code from  <a href="https://github.com/OlivierLD/raspberry-coffee/blob/master/I2C.SPI/src/i2c/sensor/TCS34725.java">raspberry-coffee</a>.
+ * This code was tested using the <a href="https://www.adafruit.com/product/1334">Adafruit color sensor.</a>
+ * Connect sensor to roboRio I2C port and instantiate class.  Component will automatically feed values to the smartdashboard
+ * keys "RGBColorSensor/[R,G,B,C]".
  * 
  * @author Chuck Benedict, Mentor, Team 997
  */
