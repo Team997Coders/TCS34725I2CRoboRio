@@ -18,3 +18,21 @@ To make this work, connect the bus pirate to the TCS34725 like so (a useful cabl
 
 With the bus pirate connected to your workstation (only tested with Windows), run `./gradlew test`. The integration test will enumerate each COM port to find the bus pirate.
 Once found, integration tests will run. Note that there are some tests which require you to point red, blue, and green objects at the sensor to pass.
+
+## Usage
+
+The jar file is currently not in Maven.  Once a final test has been run against the roboRio, we will post the binary to the Maven central repo so that it can
+be automatically resolved. For now, you will need to build the jar file and include it in your classpath.  To build, run `./gradlew build`. In the `build/libs` directory,
+you will find the jar.
+
+Next, import like so:
+```Java
+import edu.team997.first.wpilibj.*;
+```
+
+Finally, instantiate:
+```Java
+TCS34725_I2C tcs34725 = new TCS34725_I2C();
+```
+
+If you pass `true` to the constructor, verbose messages will print to the driver station console.
