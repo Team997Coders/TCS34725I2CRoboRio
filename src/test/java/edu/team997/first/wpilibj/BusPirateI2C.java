@@ -28,6 +28,12 @@ public class BusPirateI2C extends BusPirate {
         }
     }
 
+    /**
+     * Use for writing a bus pirate I2C command that just responds with 0x01 success.
+     * @param command   The command to call
+     * @throws BusPirateCommPortClosedException
+     * @throws I2CModeProtocolException
+     */
     private void commonCommand(byte command) throws BusPirateCommPortClosedException, I2CModeProtocolException {
         // Send the message to the device and wait synchrounsly for the response
         try {

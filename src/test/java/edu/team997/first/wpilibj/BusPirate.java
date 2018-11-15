@@ -78,6 +78,14 @@ public class BusPirate {
         return null;
     }
 
+    /**
+     * Open up a comm port so this instance can attempt communication with a bus pirate.
+     * @param commPortIdentifier    The comm port identifier to open
+     * @throws PortInUseException
+     * @throws UnsupportedCommOperationException
+     * @throws IOException
+     * @throws InterruptedException
+     */
     protected void openPort(CommPortIdentifier commPortIdentifier) throws PortInUseException, UnsupportedCommOperationException, IOException, InterruptedException {
         port = (SerialPort) commPortIdentifier.open(
             "BusPirate",    // Name of the application asking for the port 
@@ -89,6 +97,10 @@ public class BusPirate {
         drain();
     }
 
+    /**
+     * Closes a comm port if it was opened bt the instance.  This should be performed prior to letting
+     * this instance get teed up for garbage collection, as the port may remain open until then.
+     */
     protected void closePort() {
 		if (port != null) {
 			try {

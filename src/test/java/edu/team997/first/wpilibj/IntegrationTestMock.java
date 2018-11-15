@@ -11,6 +11,9 @@ import org.mockito.stubbing.*;
 import org.mockito.invocation.*;
 import static org.mockito.Mockito.*;
 
+/**
+ * Integration test fixture to wire up wpilib I2C -> bus pirate I2C redirection.
+ */
 public class IntegrationTestMock {
     private static BusPirateI2CTCS34725 busPirateI2CTCS34725 = null;
 
@@ -35,6 +38,11 @@ public class IntegrationTestMock {
         }
     }
 
+    /**
+     * Mock for the wpilib I2C.read method which redirects I2C reading to a bus pirate class.
+     * This enables integration testing of I2C devices without a roboRio.
+     * @return  An answer which can be given to a mockito thenAnswer dsl method.
+     */
     public static Answer<Boolean> BUS_PIRATE_READ() {
         return new Answer<Boolean>() {
             @Override
@@ -54,6 +62,11 @@ public class IntegrationTestMock {
         };
     }
 
+    /**
+     * Mock for the wpilib I2C.write method which redirects I2C writing to a bus pirate class.
+     * This enables integration testing of I2C devices without a roboRio.
+     * @return  An answer which can be given to a mockito thenAnswer dsl method.
+     */
     public static Answer<Boolean> BUS_PIRATE_WRITE() {
         return new Answer<Boolean>() {
             @Override
@@ -69,10 +82,20 @@ public class IntegrationTestMock {
         };
     }
 
+    /**
+     * Set up a matcher for the wpilib I2C.read method so that we can redirect all calls to a bus pirate.
+     * @param i2cMock   The mock to set up the matcher against
+     * @return          The result of the mock
+     */
     public static Boolean WPILIB_I2C_READ(I2C i2cMock) {
         return i2cMock.read(any(Integer.class), any(Integer.class), any(ByteBuffer.class));
     }
 
+    /**
+     * Set up a matcher for the wpilib I2C.write method so that we can redirect all calls to a bus pirate.
+     * @param ic2Mock   The mock to set up the matcher against
+     * @return          The result of the mock
+     */
     public static Boolean WPILIB_I2C_WRITE(I2C ic2Mock) {
         return ic2Mock.write(any(Integer.class), any(Integer.class));
     }
