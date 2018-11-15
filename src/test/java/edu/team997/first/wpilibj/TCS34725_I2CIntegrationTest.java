@@ -10,7 +10,6 @@ import edu.team997.first.wpilibj.BusPirateI2C.I2CModeProtocolException;
 import edu.team997.first.wpilibj.TCS34725_I2C.TransferAbortedException;
 import edu.wpi.first.wpilibj.*;
 import org.junit.*;
-import org.mockito.internal.matchers.GreaterThan;
 
 import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;

@@ -1,6 +1,7 @@
 plugins {
     id 'java-library'
-    id 'edu.wpi.first.GradleRIO' version '2019.0.0-alpha-3'
+//    id 'edu.wpi.first.GradleRIO' version '2019.0.0-alpha-3'
+    id 'edu.wpi.first.GradleRIO'
 }
 
 version =  '0.0.1'

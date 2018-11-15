@@ -123,53 +123,48 @@ public class TCS34725_I2C extends SendableBase {
         this(port, INTEGRATION_TIME_DEFAULT, GAIN_DEFAULT, verbose);
     }
 
-    /**
+	/**
      * Constructs the TCS34725 RGB color sensor over specified I2C port with a specified
      * integration time and gain.
-     * 
-     * @param port				The I2C port the sensor is attached to
-     * @param integrationTime
-     * @param gain
-     * @param verbose
-     */
-    public TCS34725_I2C(I2C.Port port, int integrationTime, int gain, boolean... verbose) {
-        this(port, TCS34725_ADDRESS, integrationTime, gain, verbose);
-    }
-
-	/**
-     * Constructs the TCS34725 RGB color sensor over specified I2C port with a specified
-     * device address.
-	 * 
-	 * @param port			The I2C port the sensor is attached to
-	 * @param deviceAddress
-	 * @param verbose
-	 */
-    public TCS34725_I2C(I2C.Port port, int deviceAddress, boolean... verbose) {
-        this(port, deviceAddress, INTEGRATION_TIME_DEFAULT, GAIN_DEFAULT, verbose);
-    }
-
-	/**
-     * Constructs the TCS34725 RGB color sensor over specified I2C port with a specified
-     * integration time and gain and device address.
 	 * 
 	 * @param port				The I2C port the sensor is attached to
-	 * @param deviceAddress
-	 * @param integrationTime
-	 * @param gain
-	 * @param verbose
+	 * @param integrationTime	Set the about of time to sense per sample. Integration Time = 2.4 ms × (256 − integrationTime).
+	 * 							TCS34725_INTEGRATIONTIME constants available for convenience.
+	 * @param gain				Two bit value defining gain from 1X-60X.  See TCS34725_GAIN constants.
+	 * @param verbose			If true, spew helpful messages to console. If omitted, assume false.
 	 */
-    public TCS34725_I2C(I2C.Port port, int deviceAddress, int integrationTime, int gain, boolean... verbose) {
-        this(new I2C(port, deviceAddress), integrationTime, gain, verbose);
+    public TCS34725_I2C(I2C.Port port, int integrationTime, int gain, boolean... verbose) {
+		this(new I2C(port, TCS34725_ADDRESS), integrationTime, gain, verbose);
+		setName("TCS34725_I2C", port.value);
     }
 
+	/**
+	 * Constructs the TCS34725 RGB color sensor over an already instantiated I2C object.
+	 * 
+	 * @param i2c		Initialized I2C object 
+	 * @param verbose	If true, spew helpful messages to console. If omitted, assume false.
+	 */
     public TCS34725_I2C(I2C i2c, boolean... verbose) {
         this(i2c, INTEGRATION_TIME_DEFAULT, GAIN_DEFAULT, verbose);
     }
 
+	/**
+	 * 
+	 * @param i2c				Initialized I2C object
+	 * @param integrationTime	Set the about of time to sense per sample. Integration Time = 2.4 ms × (256 − integrationTime).
+	 * 							TCS34725_INTEGRATIONTIME constants available for convenience.
+	 * @param gain				Two bit value defining gain from 1X-60X.  See TCS34725_GAIN constants.
+	 * @param verbose			If true, spew helpful messages to console. If omitted, assume false.
+	 */
     public TCS34725_I2C(I2C i2c, int integrationTime, int gain, boolean... verbose) {
+		// TODO: HAL usage reporting?  Need constants to define resource.
+		if (i2c == null) {
+			throw new IllegalArgumentException("i2c cannot be null");
+		}
 		this.i2c = i2c;
         this.verbose = verbose.length > 0 ? verbose[0] : false;
         try {
+			setName("TCS34725_I2C", 0);
             initialize(integrationTime, gain);
 		} catch (Exception e) {
 			System.err.println(e.getMessage());
@@ -205,18 +200,19 @@ public class TCS34725_I2C extends SendableBase {
      * 
      * @throws Exception
      */
-	private void initialize(int integrationTime, int gain) throws Exception {
+	private void initialize(int integrationTime, int gain) throws TransferAbortedException, InterruptedException {
+		if (gain > TCS34725_GAIN_60X | gain < 0) {
+			throw new IllegalArgumentException("Gain not valid.");
+		}
 		int result = this.readU8(TCS34725_ID);
 		if (result != 0x44) {
-			throw new Exception("Device is not a TCS34721/TCS34725");
+			throw new RuntimeException("Device is not a TCS34721/TCS34725");
 		}
 		// Set startup integration time and gain
 		setIntegrationTime(integrationTime);
 		setGain(gain);
 		// Power on
 		enable();
-        //TODO: How do I get the channel number from a wired up i2c object (which port was used)?  Members are private.
-        setName("TCS34725_I2C", 0);
         if (verbose) {
             System.out.println("TCS34725 initialized");
         }
@@ -360,7 +356,6 @@ public class TCS34725_I2C extends SendableBase {
 			throw new TransferAbortedException("Write aborted");
 		}
 		if (verbose) {
-			//TODO: The address constant referenced below is not necessarily correct...how to get from i2c object?
 			System.out.println("(U8) I2C: Device " + toHex(TCS34725_ADDRESS) + " wrote " + toHex(value) + " to reg " + toHex(~TCS34725_COMMAND_BIT & register));
 		}
 	}
@@ -402,7 +397,6 @@ public class TCS34725_I2C extends SendableBase {
 		}
 		result = rawByte.get() & 0xFF;
 		if (verbose) {
-			//TODO: The address constant referenced below is not necessarily correct...how to get from i2c object?
 			System.out.println("(U8) I2C: Device " + toHex(TCS34725_ADDRESS) + " returned " + toHex(result) + " from reg " + toHex(~TCS34725_COMMAND_BIT & reg));
 		}
 		return result;
