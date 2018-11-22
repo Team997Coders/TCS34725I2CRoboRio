@@ -1,3 +1,5 @@
+[![Release](https://jitpack.io/v/Team997Coders/TCS34725I2CRoboRio.svg)](https://jitpack.io/#Team997Coders/TCS34725I2CRoboRio)
+
 # TCS34725 I2C Driver for RoboRio/WPILib - Java
 
 This is an I2C driver for a TCS34725 RGB color sensor.  It was developed against [this Adafruit product](https://www.adafruit.com/product/1334)
@@ -21,9 +23,18 @@ Once found, integration tests will run. Note that there are some tests which req
 
 ## Usage
 
-The jar file is currently not in Maven.  Once a final test has been run against the roboRio, we will post the binary to the Maven central repo so that it can
-be automatically resolved. For now, you will need to build the jar file and include it in your classpath.  To build, run `./gradlew build`. In the `build/libs` directory,
-you will find the jar.
+In your build.gradle file:
+```
+allprojects {
+    repositories {
+        jcenter()
+        maven { url "https://jitpack.io" }
+    }
+}
+dependencies {
+    implementation 'com.github.Team997Coders:TCS34725I2CRoboRio:0.1.0'
+}
+```
 
 Next, import like so:
 ```Java
