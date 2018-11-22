@@ -32,7 +32,7 @@ allprojects {
     }
 }
 dependencies {
-    implementation 'com.github.Team997Coders:TCS34725I2CRoboRio:0.1.0'
+    compile 'com.github.Team997Coders:TCS34725I2CRoboRio:0.1.0'
 }
 ```
 
